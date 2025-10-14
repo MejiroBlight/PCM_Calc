@@ -1,35 +1,42 @@
-// PipeParams用
-pub struct PipeTypeParam{
-    pub pressure_loss: f64, // MPa
-    pub pipe_count: usize,
+use calc::described_struct;
+
+described_struct! {
+    struct PipeTypeParam {
+        pressure_loss: f64 => "圧力損失(MPa)",
+        pipe_count: usize => "パイプ本数(-)",
+    }
 }
 
-// CalcParams用
-pub struct CalcParam {
-    pub mesh_count: usize,
-    pub time_step: f64,
-    pub calculation_step: usize,
-    pub pipe_length: f64,
-    pub pipe_outdir: f64,
-    pub pipe_indir: f64,
-    pub pcm_init_thickness: f64,
-    pub water_init_temp: f64,
-    pub pcm_temp: f64,
+described_struct! {
+    struct CalcParam {
+        mesh_count: usize => "メッシュ数(-)",
+        time_step: f64 => "時間刻み(s)",
+        calculation_step: usize => "計算ステップ数(-)",
+        pipe_length: f64 => "パイプ長さ(m)",
+        pipe_outdir: f64 => "パイプ外径(m)",
+        pipe_indir: f64 => "パイプ内径(m)",
+        pcm_init_thickness: f64 => "PCM初期厚み(m)",
+        water_init_temp: f64 => "水初期温度(℃)",
+        pcm_temp: f64 => "PCM温度(℃)",
+    }
 }
 
-// GeneralParams用
-pub struct GeneralParam {
-    pub water_dens: f64,
-    pub water_cond: f64,
-    pub water_spec: f64,
-    pub water_visc: f64,
-    pub copper_cond: f64,
-    pub pcm_latent: f64,
-    pub pcm_dens: f64,
-    pub nusscelt: f64,
-    pub pcm_cond: f64,
-    pub g: f64,
+described_struct! {
+    struct GeneralParam {
+        water_dens: f64 => "水密度(kg/m3)",
+        water_cond: f64 => "水熱伝導率(W/mK)",
+        water_spec: f64 => "水比熱(J/kgK)",
+        water_visc: f64 => "水粘性(Pa・s)",
+        copper_cond: f64 => "銅熱伝導率(W/mK)",
+        pcm_latent: f64 => "PCM潜熱(J/kg)",
+        pcm_dens: f64 => "PCM密度(kg/m3)",
+        nusscelt: f64 => "ヌセルト数(-)",
+        pcm_cond: f64 => "PCM熱伝導率(W/mK)",
+        g: f64 => "重力加速度(m/s2)",
+    }
 }
+
+
 
 #[derive(Debug, Clone, Copy)]
 pub struct Mesh{
