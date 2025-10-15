@@ -36,10 +36,9 @@ where
     ui.horizontal(|ui| {
         ui.label(format!("{}:", param.desc()));
         let entry = str_buffer.entry(param.desc()).or_insert_with(|| param.value.to_string());
-        if ui.add(egui::TextEdit::singleline(entry).desired_width(80.0)).changed() {
-            if let Ok(val) = entry.parse() {
-                param.value = val;
-            }
+        ui.add(egui::TextEdit::singleline(entry).desired_width(80.0));
+        if let Ok(val) = entry.parse() {
+            param.value = val;
         }
     });
 }
@@ -108,19 +107,37 @@ impl eframe::App for SimApp {
                             .set_file_name("calc_result.xlsx")
                             .save_file() {
                             let mut book = umya_spreadsheet::new_file();
-                            // 1ページ目: パラメータ一覧（str_bufferのkeyとvalueを列挙）
+                            // 1ページ目: パラメータ一覧（1,2行目は通常パラメータ、3列目以降にPipeTypeParamをpipeごとに2列ずつ）
                             let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
-                            let mut row = 1u32;
-                            let mut keys: Vec<_> = self.str_buffer.keys().collect();
-                            for key in keys {
+                            // 1,2行目: 通常パラメータ
+                            let mut keys: Vec<_> = self.str_buffer.keys().filter(|k| !k.contains("PipeType")).collect();
+                            for (i, key) in keys.iter().enumerate() {
                                 let k: &str = &**key;
                                 let value = self.str_buffer.get(k);
                                 let v: &str = value.map(|s| s.as_str()).unwrap_or("");
-                                sheet1.get_cell_mut((1, row)).set_value(k);
-                                sheet1.get_cell_mut((2, row)).set_value(v);
-                                row += 1;
+                                sheet1.get_cell_mut((1, (i+1) as u32)).set_value(k);
+                                sheet1.get_cell_mut((2, (i+1) as u32)).set_value(v);
                             }
-
+                            // 3列目以降: PipeTypeParam
+                            let pipe_count = self.pipe_params.len();
+                            let pipe_params = ["圧力損失(MPa)", "パイプ本数(-)"];
+                            // 1行目: Pipe1, Pipe2, ...
+                            for i in 0..pipe_count {
+                                let base_col = 3 + (i as u32) * 2;
+                                sheet1.get_cell_mut((base_col, 1)).set_value(format!("Pipe{}", i+1));
+                            }
+                            // 2行目: 空欄
+                            // 3行目以降: パラメータ名と値
+                            for (j, param_name) in pipe_params.iter().enumerate() {
+                                for i in 0..pipe_count {
+                                    let base_col = 3 + (i as u32) * 2;
+                                    let key = format!("{} (PipeType {})", param_name, i+1);
+                                    let value = self.str_buffer.get(&*Box::leak(key.clone().into_boxed_str())).map(|s| s.as_str()).unwrap_or("");
+                                    sheet1.get_cell_mut((base_col, (j+2) as u32)).set_value(*param_name);
+                                    sheet1.get_cell_mut((base_col+1, (j+2) as u32)).set_value(value);
+                                }
+                            }
+                            sheet1.set_name("Parameters");
                             // 2ページ目: 各管の出口温度と平均出口温度（最左列に計算ステップ）
                             let sheet2 = book.new_sheet("PipeOutTemps").unwrap();
                             // ヘッダー
@@ -165,6 +182,78 @@ impl eframe::App for SimApp {
                         }
                     } else {
                         println!("計算結果がありません");
+                    }
+                }
+                if ui.button("xlsxからパラメータ読込").clicked() {
+                    if let Some(path) = FileDialog::new()
+                        .add_filter("Excelファイル", &["xlsx"])
+                        .pick_file() {
+                        match umya_spreadsheet::reader::xlsx::read(path) {
+                            Ok(book) => {
+                                if let Some(sheet) = book.get_sheet_by_name("Parameters") {
+                                    // 1,2行目: 通常パラメータ
+                                    let mut max_col = sheet.get_highest_column();
+                                    let mut max_row = sheet.get_highest_row();
+                                    // 通常パラメータ（1,2列目）
+                                    for col in 1..=2 {
+                                        for row in 1..=max_row {
+                                            let key = sheet.get_cell((col, row)).map(|cell| cell.get_value().to_string()).unwrap_or_default();
+                                            let value = if col == 1 {
+                                                // 1列目はパラメータ名、2列目は値
+                                                sheet.get_cell((col+1, row)).map(|cell| cell.get_value().to_string()).unwrap_or_default()
+                                            } else {
+                                                continue;
+                                            };
+                                            if !key.is_empty() && !value.is_empty() {
+                                                self.str_buffer.insert(Box::leak(key.clone().into_boxed_str()), value.clone());
+                                            }
+                                        }
+                                    }
+
+                                    // PipeTypeParam（3列目以降、2列ごとに1Pipe）
+                                    let mut pipe_params: Vec<simulation::PipeTypeParam> = Vec::new();
+                                    let pipe_param_names = ["圧力損失(MPa)", "パイプ本数(-)"];
+                                    let mut pipe_col = 3;
+                                    while pipe_col <= max_col {
+                                        // 1行目: PipeN
+                                        let pipe_label = sheet.get_cell((pipe_col, 1)).map(|cell| cell.get_value().to_string()).unwrap_or_default();
+                                        if pipe_label.is_empty() {
+                                            break;
+                                        }
+                                        // 2行目: 空欄（スキップ）
+                                        // 3行目以降: パラメータ名と値
+                                        let mut pipe_param = simulation::PipeTypeParam::default();
+                                        for (j, param_name) in pipe_param_names.iter().enumerate() {
+                                            let name_cell = sheet.get_cell((pipe_col, (j+2) as u32)).map(|cell| cell.get_value().to_string()).unwrap_or_default();
+                                            let value_cell = sheet.get_cell((pipe_col+1, (j+2) as u32)).map(|cell| cell.get_value().to_string()).unwrap_or_default();
+                                            if name_cell == *param_name {
+                                                // str_bufferにも反映
+                                                let key = format!("{} (PipeType {})", param_name, (pipe_col-2)/2 + 1);
+                                                self.str_buffer.insert(Box::leak(key.clone().into_boxed_str()), value_cell.clone());
+                                                // PipeTypeParam構造体にも反映
+                                                if param_name == &"圧力損失(MPa)" {
+                                                    if let Ok(v) = value_cell.parse() {
+                                                        pipe_param.pressure_loss.value = v;
+                                                    }
+                                                } else if param_name == &"パイプ本数(-)" {
+                                                    if let Ok(v) = value_cell.parse() {
+                                                        pipe_param.pipe_count.value = v;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        pipe_params.push(pipe_param);
+                                        pipe_col += 2;
+                                    }
+                                    if !pipe_params.is_empty() {
+                                        self.pipe_params = pipe_params;
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                println!("xlsx読込エラー: {}", e);
+                            }
+                        }
                     }
                 }
             });
