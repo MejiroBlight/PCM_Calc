@@ -1,4 +1,5 @@
 use umya_spreadsheet::*;
+use rfd::FileDialog;
 mod simulation;
 use std::collections::HashMap;
 
@@ -102,61 +103,66 @@ impl eframe::App for SimApp {
                 }
                 if ui.button("計算結果をxlsxで保存").clicked() {
                     if let Some(result) = &self.result {
-                        let mut book = umya_spreadsheet::new_file();
-                        // 1ページ目: パラメータ一覧（str_bufferのkeyとvalueを列挙）
-                        let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
-                        let mut row = 1u32;
-                        let mut keys: Vec<_> = self.str_buffer.keys().collect();
-                        for key in keys {
-                            let k: &str = &**key;
-                            let value = self.str_buffer.get(k);
-                            let v: &str = value.map(|s| s.as_str()).unwrap_or("");
-                            sheet1.get_cell_mut((1, row)).set_value(k);
-                            sheet1.get_cell_mut((2, row)).set_value(v);
-                            row += 1;
-                        }
+                        if let Some(path) = FileDialog::new()
+                            .add_filter("Excelファイル", &["xlsx"])
+                            .set_file_name("calc_result.xlsx")
+                            .save_file() {
+                            let mut book = umya_spreadsheet::new_file();
+                            // 1ページ目: パラメータ一覧（str_bufferのkeyとvalueを列挙）
+                            let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
+                            let mut row = 1u32;
+                            let mut keys: Vec<_> = self.str_buffer.keys().collect();
+                            for key in keys {
+                                let k: &str = &**key;
+                                let value = self.str_buffer.get(k);
+                                let v: &str = value.map(|s| s.as_str()).unwrap_or("");
+                                sheet1.get_cell_mut((1, row)).set_value(k);
+                                sheet1.get_cell_mut((2, row)).set_value(v);
+                                row += 1;
+                            }
 
-                        // 2ページ目: 各管の出口温度と平均出口温度（最左列に計算ステップ）
-                        let sheet2 = book.new_sheet("PipeOutTemps").unwrap();
-                        // ヘッダー
-                        sheet2.get_cell_mut((1, 1)).set_value("Step");
-                        for (i, _) in result.pipe_end_temperatures.iter().enumerate() {
-                            sheet2.get_cell_mut(((i+2) as u32, 1)).set_value(format!("Pipe {}", i+1));
-                        }
-                        let col_count = result.pipe_end_temperatures.len();
-                        let max_len = result.pipe_end_temperatures.iter().map(|v| v.len()).max().unwrap_or(0);
-                        let avg_col = (col_count+2) as u32;
-                        sheet2.get_cell_mut((avg_col, 1)).set_value("Average");
-                        for row in 0..max_len {
-                            // ステップ番号
-                            sheet2.get_cell_mut((1, (row+2) as u32)).set_value(row.to_string());
-                            // 各パイプの出口温度
-                            for (col, temps) in result.pipe_end_temperatures.iter().enumerate() {
-                                if let Some(val) = temps.get(row) {
-                                    sheet2.get_cell_mut(((col+2) as u32, (row+2) as u32)).set_value(val.to_string());
+                            // 2ページ目: 各管の出口温度と平均出口温度（最左列に計算ステップ）
+                            let sheet2 = book.new_sheet("PipeOutTemps").unwrap();
+                            // ヘッダー
+                            sheet2.get_cell_mut((1, 1)).set_value("Step");
+                            for (i, _) in result.pipe_end_temperatures.iter().enumerate() {
+                                sheet2.get_cell_mut(((i+2) as u32, 1)).set_value(format!("Pipe {}", i+1));
+                            }
+                            let col_count = result.pipe_end_temperatures.len();
+                            let max_len = result.pipe_end_temperatures.iter().map(|v| v.len()).max().unwrap_or(0);
+                            let avg_col = (col_count+2) as u32;
+                            sheet2.get_cell_mut((avg_col, 1)).set_value("Average");
+                            for row in 0..max_len {
+                                // ステップ番号
+                                sheet2.get_cell_mut((1, (row+2) as u32)).set_value(row.to_string());
+                                // 各パイプの出口温度
+                                for (col, temps) in result.pipe_end_temperatures.iter().enumerate() {
+                                    if let Some(val) = temps.get(row) {
+                                        sheet2.get_cell_mut(((col+2) as u32, (row+2) as u32)).set_value(val.to_string());
+                                    }
+                                }
+                                // 平均出口温度
+                                if let Some(temp) = result.average_end_temperatures.get(row) {
+                                    sheet2.get_cell_mut((avg_col, (row+2) as u32)).set_value(temp.to_string());
                                 }
                             }
-                            // 平均出口温度
-                            if let Some(temp) = result.average_end_temperatures.get(row) {
-                                sheet2.get_cell_mut((avg_col, (row+2) as u32)).set_value(temp.to_string());
+
+                            // 3ページ目: その他のresult値
+                            let sheet3 = book.new_sheet("OtherResults").unwrap();
+                            // pipe_courants
+                            sheet3.get_cell_mut((1, 1)).set_value("pipe_courants");
+                            for (i, v) in result.pipe_courants.iter().enumerate() {
+                                sheet3.get_cell_mut(((i+2) as u32, 1)).set_value(v.to_string());
                             }
-                        }
+                            // pipe_flow_rates
+                            sheet3.get_cell_mut((1, 2)).set_value("pipe_flow_rates");
+                            for (i, v) in result.pipe_flow_rates.iter().enumerate() {
+                                sheet3.get_cell_mut(((i+2) as u32, 2)).set_value(v.to_string());
+                            }
 
-                        // 3ページ目: その他のresult値
-                        let sheet3 = book.new_sheet("OtherResults").unwrap();
-                        // pipe_courants
-                        sheet3.get_cell_mut((1, 1)).set_value("pipe_courants");
-                        for (i, v) in result.pipe_courants.iter().enumerate() {
-                            sheet3.get_cell_mut(((i+2) as u32, 1)).set_value(v.to_string());
+                            let _ = umya_spreadsheet::writer::xlsx::write(&book, path);
+                            println!("計算結果をExcelファイルに保存しました");
                         }
-                        // pipe_flow_rates
-                        sheet3.get_cell_mut((1, 2)).set_value("pipe_flow_rates");
-                        for (i, v) in result.pipe_flow_rates.iter().enumerate() {
-                            sheet3.get_cell_mut(((i+2) as u32, 2)).set_value(v.to_string());
-                        }
-
-                        let _ = umya_spreadsheet::writer::xlsx::write(&book, "calc_result.xlsx");
-                        println!("計算結果をcalc_result.xlsxに保存しました");
                     } else {
                         println!("計算結果がありません");
                     }
