@@ -1,32 +1,17 @@
+use umya_spreadsheet::*;
 mod simulation;
+use std::collections::HashMap;
+
+use calc::Described;
 use simulation::{GeneralParam, CalcParam, PipeTypeParam, simulate};
 use eframe::{egui};
 
 struct SimApp {
-    // 入力パラメータ
-    mesh_count: usize,
-    time_step: f64,
-    calculation_step: usize,
-    pipe_length: f64,
-    pipe_outdir: f64,
-    pipe_indir: f64,
-    pcm_init_thickness: f64,
-    water_init_temp: f64,
-    pcm_temp: f64,
-    // GeneralParam
-    water_dens: f64,
-    water_cond: f64,
-    water_spec: f64,
-    water_visc: f64,
-    copper_cond: f64,
-    pcm_latent: f64,
-    pcm_dens: f64,
-    nusscelt: f64,
-    pcm_cond: f64,
-    g: f64,
-    // PipeTypeParam
-    pressure_loss: f64,
-    pipe_count: usize,
+    str_buffer: HashMap<&'static str, String>,
+    // パラメータ
+    calc_param: simulation::CalcParam,
+    general_param: simulation::GeneralParam,
+    pipe_params: Vec<simulation::PipeTypeParam>,
     // 結果
     result: Option<simulation::CalcResult>,
 }
@@ -34,146 +19,149 @@ struct SimApp {
 impl Default for SimApp {
     fn default() -> Self {
         Self {
-            mesh_count: 10,
-            time_step: 0.1,
-            calculation_step: 100,
-            pipe_length: 1.0,
-            pipe_outdir: 0.03,
-            pipe_indir: 0.025,
-            pcm_init_thickness: 0.01,
-            water_init_temp: 20.0,
-            pcm_temp: 60.0,
-            water_dens: 1000.0,
-            water_cond: 0.6,
-            water_spec: 4180.0,
-            water_visc: 0.001,
-            copper_cond: 400.0,
-            pcm_latent: 200000.0,
-            pcm_dens: 800.0,
-            nusscelt: 100.0,
-            pcm_cond: 0.2,
-            g: 9.8,
-            pressure_loss: 0.1,
-            pipe_count: 1,
+            str_buffer: HashMap::new(),
+            calc_param: simulation::CalcParam::default(),
+            general_param: simulation::GeneralParam::default(),
+            pipe_params: vec![simulation::PipeTypeParam::default()],
             result: None,
         }
     }
 }
 
-impl SimApp {
-    fn add_param<T>(ui: &mut egui::Ui, name: String, value: &mut T){
-        ui.horizontal(|ui| {
-            ui.label("pcm_dens:");
-            if ui.add(egui::TextEdit::singleline(&mut self.pcm_dens_str).desired_width(80.0)).changed() {
-                if let Ok(val) = self.pcm_dens_str.parse() {
-                    self.general_params.pcm_dens = val;
-                }
+fn add_param<T>(str_buffer: &mut HashMap<&'static str, String>, ui: &mut egui::Ui, param: &mut Described<T>)
+where
+    T: std::str::FromStr + ToString,
+{
+    ui.horizontal(|ui| {
+        ui.label(format!("{}:", param.desc()));
+        let entry = str_buffer.entry(param.desc()).or_insert_with(|| param.value.to_string());
+        if ui.add(egui::TextEdit::singleline(entry).desired_width(80.0)).changed() {
+            if let Ok(val) = entry.parse() {
+                param.value = val;
             }
-            ui.label("kg/m³");
-        });
-    }
+        }
+    });
 }
 
 impl eframe::App for SimApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("PCM Simulation");
-            
-            ui.horizontal(|ui| {
-                ui.label("mesh_count");
-                ui.add(egui::DragValue::new(&mut self.mesh_count));
-                ui.label("time_step");
-                ui.add(egui::DragValue::new(&mut self.time_step));
-                ui.label("calculation_step");
-                ui.add(egui::DragValue::new(&mut self.calculation_step));
-            });
-            ui.horizontal(|ui| {
-                ui.label("pipe_length");
-                ui.add(egui::DragValue::new(&mut self.pipe_length));
-                ui.label("pipe_outdir");
-                ui.add(egui::DragValue::new(&mut self.pipe_outdir));
-                ui.label("pipe_indir");
-                ui.add(egui::DragValue::new(&mut self.pipe_indir));
-            });
-            ui.horizontal(|ui| {
-                ui.label("pcm_init_thickness");
-                ui.add(egui::DragValue::new(&mut self.pcm_init_thickness));
-                ui.label("water_init_temp");
-                ui.add(egui::DragValue::new(&mut self.water_init_temp));
-                ui.label("pcm_temp");
-                ui.add(egui::DragValue::new(&mut self.pcm_temp));
-            });
-            ui.separator();
-            ui.horizontal(|ui| {
-                ui.label("water_dens");
-                ui.add(egui::DragValue::new(&mut self.water_dens));
-                ui.label("water_cond");
-                ui.add(egui::DragValue::new(&mut self.water_cond));
-                ui.label("water_spec");
-                ui.add(egui::DragValue::new(&mut self.water_spec));
-            });
-            ui.horizontal(|ui| {
-                ui.label("water_visc");
-                ui.add(egui::DragValue::new(&mut self.water_visc));
-                ui.label("copper_cond");
-                ui.add(egui::DragValue::new(&mut self.copper_cond));
-                ui.label("pcm_latent");
-                ui.add(egui::DragValue::new(&mut self.pcm_latent));
-            });
-            ui.horizontal(|ui| {
-                ui.label("pcm_dens");
-                ui.add(egui::DragValue::new(&mut self.pcm_dens));
-                ui.label("nusscelt");
-                ui.add(egui::DragValue::new(&mut self.nusscelt));
-                ui.label("pcm_cond");
-                ui.add(egui::DragValue::new(&mut self.pcm_cond));
-                ui.label("g");
-                ui.add(egui::DragValue::new(&mut self.g));
-            });
-            ui.separator();
-            ui.horizontal(|ui| {
-                ui.label("pressure_loss");
-                ui.add(egui::DragValue::new(&mut self.pressure_loss));
-                ui.label("pipe_count");
-                ui.add(egui::DragValue::new(&mut self.pipe_count));
-            });
-            if ui.button("計算実行").clicked() {
-                let general_param = GeneralParam {
-                    water_dens: self.water_dens,
-                    water_cond: self.water_cond,
-                    water_spec: self.water_spec,
-                    water_visc: self.water_visc,
-                    copper_cond: self.copper_cond,
-                    pcm_latent: self.pcm_latent,
-                    pcm_dens: self.pcm_dens,
-                    nusscelt: self.nusscelt,
-                    pcm_cond: self.pcm_cond,
-                    g: self.g,
-                };
-                let calc_param = CalcParam {
-                    mesh_count: self.mesh_count,
-                    time_step: self.time_step,
-                    calculation_step: self.calculation_step,
-                    pipe_length: self.pipe_length,
-                    pipe_outdir: self.pipe_outdir,
-                    pipe_indir: self.pipe_indir,
-                    pcm_init_thickness: self.pcm_init_thickness,
-                    water_init_temp: self.water_init_temp,
-                    pcm_temp: self.pcm_temp,
-                };
-                let pipe_params = vec![PipeTypeParam {
-                    pressure_loss: self.pressure_loss,
-                    pipe_count: self.pipe_count,
-                }];
-                self.result = Some(simulate(general_param, calc_param, pipe_params));
-            }
-            if let Some(result) = &self.result {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.heading("PCM Simulation");
+                add_param(&mut self.str_buffer, ui, &mut self.calc_param.mesh_count);
+                add_param(&mut self.str_buffer, ui, &mut self.calc_param.time_step);
+                add_param(&mut self.str_buffer, ui, &mut self.calc_param.calculation_step);
+                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pipe_length);
+                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pipe_outdir);
+                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pipe_indir);
+                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pcm_init_thickness);
+                add_param(&mut self.str_buffer, ui, &mut self.calc_param.water_init_temp);
+                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pcm_temp);
                 ui.separator();
-                ui.label("平均出口温度 (一部):");
-                for (i, temp) in result.average_end_temperatures.iter().take(10).enumerate() {
-                    ui.label(format!("step {}: {:.2}℃", i, temp));
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.water_dens);
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.water_cond);
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.water_spec);
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.water_visc);
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.copper_cond);
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.pcm_latent);
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.pcm_dens);
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.nusscelt);
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.pcm_cond);
+                add_param(&mut self.str_buffer, ui, &mut self.general_param.g);
+                ui.separator();
+                ui.label("PipeType Parameters");
+                let mut remove_idx = None;
+                let pipe_count = self.pipe_params.len();
+                for (i, param) in self.pipe_params.iter_mut().enumerate() {
+                    // descにインデックスを付与
+                    param.pressure_loss.desc = Box::leak(format!("圧力損失(MPa) (PipeType {})", i+1).into_boxed_str());
+                    param.pipe_count.desc = Box::leak(format!("パイプ本数(-) (PipeType {})", i+1).into_boxed_str());
+                    ui.horizontal(|ui| {
+                        add_param(&mut self.str_buffer, ui, &mut param.pressure_loss);
+                        add_param(&mut self.str_buffer, ui, &mut param.pipe_count);
+                    });
+                    if pipe_count > 1 {
+                        if ui.button("削除").clicked() {
+                            remove_idx = Some(i);
+                        }
+                    }
+                    ui.separator();
                 }
-            }
+                if let Some(idx) = remove_idx {
+                    self.pipe_params.remove(idx);
+                }
+                if ui.button("パイプタイプ追加").clicked() {
+                    self.pipe_params.push(simulation::PipeTypeParam::default());
+                }
+                if ui.button("計算実行").clicked() {
+                    self.result = Some(simulate(
+                        self.general_param.clone(),
+                        self.calc_param.clone(),
+                        self.pipe_params.clone(),
+                    ));
+                }
+                if ui.button("計算結果をxlsxで保存").clicked() {
+                    if let Some(result) = &self.result {
+                        let mut book = umya_spreadsheet::new_file();
+                        // 1ページ目: パラメータ一覧（str_bufferのkeyとvalueを列挙）
+                        let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
+                        let mut row = 1u32;
+                        let mut keys: Vec<_> = self.str_buffer.keys().collect();
+                        for key in keys {
+                            let k: &str = &**key;
+                            let value = self.str_buffer.get(k);
+                            let v: &str = value.map(|s| s.as_str()).unwrap_or("");
+                            sheet1.get_cell_mut((1, row)).set_value(k);
+                            sheet1.get_cell_mut((2, row)).set_value(v);
+                            row += 1;
+                        }
+
+                        // 2ページ目: 各管の出口温度と平均出口温度（最左列に計算ステップ）
+                        let sheet2 = book.new_sheet("PipeOutTemps").unwrap();
+                        // ヘッダー
+                        sheet2.get_cell_mut((1, 1)).set_value("Step");
+                        for (i, _) in result.pipe_end_temperatures.iter().enumerate() {
+                            sheet2.get_cell_mut(((i+2) as u32, 1)).set_value(format!("Pipe {}", i+1));
+                        }
+                        let col_count = result.pipe_end_temperatures.len();
+                        let max_len = result.pipe_end_temperatures.iter().map(|v| v.len()).max().unwrap_or(0);
+                        let avg_col = (col_count+2) as u32;
+                        sheet2.get_cell_mut((avg_col, 1)).set_value("Average");
+                        for row in 0..max_len {
+                            // ステップ番号
+                            sheet2.get_cell_mut((1, (row+2) as u32)).set_value(row.to_string());
+                            // 各パイプの出口温度
+                            for (col, temps) in result.pipe_end_temperatures.iter().enumerate() {
+                                if let Some(val) = temps.get(row) {
+                                    sheet2.get_cell_mut(((col+2) as u32, (row+2) as u32)).set_value(val.to_string());
+                                }
+                            }
+                            // 平均出口温度
+                            if let Some(temp) = result.average_end_temperatures.get(row) {
+                                sheet2.get_cell_mut((avg_col, (row+2) as u32)).set_value(temp.to_string());
+                            }
+                        }
+
+                        // 3ページ目: その他のresult値
+                        let sheet3 = book.new_sheet("OtherResults").unwrap();
+                        // pipe_courants
+                        sheet3.get_cell_mut((1, 1)).set_value("pipe_courants");
+                        for (i, v) in result.pipe_courants.iter().enumerate() {
+                            sheet3.get_cell_mut(((i+2) as u32, 1)).set_value(v.to_string());
+                        }
+                        // pipe_flow_rates
+                        sheet3.get_cell_mut((1, 2)).set_value("pipe_flow_rates");
+                        for (i, v) in result.pipe_flow_rates.iter().enumerate() {
+                            sheet3.get_cell_mut(((i+2) as u32, 2)).set_value(v.to_string());
+                        }
+
+                        let _ = umya_spreadsheet::writer::xlsx::write(&book, "calc_result.xlsx");
+                        println!("計算結果をcalc_result.xlsxに保存しました");
+                    } else {
+                        println!("計算結果がありません");
+                    }
+                }
+            });
         });
     }
 }

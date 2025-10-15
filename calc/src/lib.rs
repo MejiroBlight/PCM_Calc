@@ -1,19 +1,20 @@
-#[macro_export]
-macro_rules! described_struct {
-    (
-        struct $name:ident {
-            $(
-                $(#[$meta:meta])* $field:ident : $type:ty => $desc:expr
-            ),* $(,)?
-        }
-    ) => {
-        pub struct $name {
-            $( $(#[$meta])* pub $field: $type ),*
-        }
-        impl $name {
-            pub const DESCRIPTIONS: &'static [(&'static str, &'static str)] = &[
-                $( (stringify!($field), $desc) ),*
-            ];
-        }
-    };
+use std::ops::Deref;
+
+#[derive(Clone)]
+pub struct Described<T> {
+    pub value: T,
+    pub desc: &'static str,
+}
+
+impl<T> Deref for Described<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl<T> Described<T> {
+    pub fn desc(&self) -> &'static str {
+        self.desc
+    }
 }

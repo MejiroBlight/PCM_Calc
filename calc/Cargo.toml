@@ -1,4 +1,5 @@
 [dependencies]
+umya-spreadsheet = "2.3.3"
 egui = "0.33.0"
 eframe = "0.33.0"
 [package]
