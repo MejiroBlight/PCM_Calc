@@ -1,14 +1,12 @@
-use umya_spreadsheet::*;
+
 use rfd::FileDialog;
 mod simulation;
-use std::collections::HashMap;
 
+use simulation::{GeneralParam, CalcParam, simulate};
 use calc::Described;
-use simulation::{GeneralParam, CalcParam, PipeTypeParam, simulate};
 use eframe::{egui};
 
 struct SimApp {
-    str_buffer: HashMap<&'static str, String>,
     // パラメータ
     calc_param: simulation::CalcParam,
     general_param: simulation::GeneralParam,
@@ -20,7 +18,6 @@ struct SimApp {
 impl Default for SimApp {
     fn default() -> Self {
         Self {
-            str_buffer: HashMap::new(),
             calc_param: simulation::CalcParam::default(),
             general_param: simulation::GeneralParam::default(),
             pipe_params: vec![simulation::PipeTypeParam::default()],
@@ -29,56 +26,98 @@ impl Default for SimApp {
     }
 }
 
-fn add_param<T>(str_buffer: &mut HashMap<&'static str, String>, ui: &mut egui::Ui, param: &mut Described<T>)
-where
-    T: std::str::FromStr + ToString,
-{
+impl SimApp {
+    fn reset_params(&mut self) {
+        self.calc_param = simulation::CalcParam::default();
+        self.general_param = simulation::GeneralParam::default();
+        self.pipe_params = vec![simulation::PipeTypeParam::default()];
+        self.result = None;
+    }
+}
+
+struct ParamArrays<'a>{
+    calc_usize: Vec<&'a mut Described<usize>>,
+    calc_f64: Vec<&'a mut Described<f64>>,
+    general: Vec<&'a mut Described<f64>>
+}
+
+fn add_param<T: egui::emath::Numeric>(ui: &mut egui::Ui, param: &mut Described<T>) {
     ui.horizontal(|ui| {
         ui.label(format!("{}:", param.desc()));
-        let entry = str_buffer.entry(param.desc()).or_insert_with(|| param.value.to_string());
-        ui.add(egui::TextEdit::singleline(entry).desired_width(80.0));
-        if let Ok(val) = entry.parse() {
-            param.value = val;
-        }
+        ui.add(egui::DragValue::new(&mut param.value));
     });
+}
+
+fn get_param_arrays<'a>(
+    calc_param: &'a mut CalcParam,
+    general_param: &'a mut GeneralParam,
+) -> ParamArrays<'a> {
+    let calc_usize = vec![
+        &mut calc_param.mesh_count,
+        &mut calc_param.calculation_step,
+    ];
+    let calc_f64 = vec![
+        &mut calc_param.time_step,
+        &mut calc_param.pipe_length,
+        &mut calc_param.pipe_outdir,
+        &mut calc_param.pipe_indir,
+        &mut calc_param.pcm_init_thickness,
+        &mut calc_param.water_init_temp,
+        &mut calc_param.pcm_temp,
+    ];
+    let general = vec![
+        &mut general_param.water_dens,
+        &mut general_param.water_cond,
+        &mut general_param.water_spec,
+        &mut general_param.water_visc,
+        &mut general_param.copper_cond,
+        &mut general_param.pcm_latent,
+        &mut general_param.pcm_dens,
+        &mut general_param.nusscelt,
+        &mut general_param.pcm_cond,
+        &mut general_param.g,
+    ];
+    ParamArrays {
+        calc_usize,
+        calc_f64,
+        general,
+    }
 }
 
 impl eframe::App for SimApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
+                let ParamArrays {
+                    calc_usize,
+                    calc_f64,
+                    general,
+                } = get_param_arrays(&mut self.calc_param, &mut self.general_param);
                 ui.heading("PCM Simulation");
-                add_param(&mut self.str_buffer, ui, &mut self.calc_param.mesh_count);
-                add_param(&mut self.str_buffer, ui, &mut self.calc_param.time_step);
-                add_param(&mut self.str_buffer, ui, &mut self.calc_param.calculation_step);
-                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pipe_length);
-                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pipe_outdir);
-                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pipe_indir);
-                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pcm_init_thickness);
-                add_param(&mut self.str_buffer, ui, &mut self.calc_param.water_init_temp);
-                add_param(&mut self.str_buffer, ui, &mut self.calc_param.pcm_temp);
+                // CalcParam
+                for param in calc_usize {
+                    add_param(ui, param);
+                }
+                for param in calc_f64 {
+                    add_param(ui, param);
+                }
                 ui.separator();
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.water_dens);
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.water_cond);
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.water_spec);
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.water_visc);
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.copper_cond);
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.pcm_latent);
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.pcm_dens);
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.nusscelt);
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.pcm_cond);
-                add_param(&mut self.str_buffer, ui, &mut self.general_param.g);
+
+                // GeneralParam
+                for param in general {
+                    add_param(ui, param);
+                }
                 ui.separator();
+
+                // PipeTypeParam
                 ui.label("PipeType Parameters");
                 let mut remove_idx = None;
                 let pipe_count = self.pipe_params.len();
                 for (i, param) in self.pipe_params.iter_mut().enumerate() {
-                    // descにインデックスを付与
-                    param.pressure_loss.desc = Box::leak(format!("圧力損失(MPa) (PipeType {})", i+1).into_boxed_str());
-                    param.pipe_count.desc = Box::leak(format!("パイプ本数(-) (PipeType {})", i+1).into_boxed_str());
+                    ui.label(format!("PipeType {}", i + 1));
                     ui.horizontal(|ui| {
-                        add_param(&mut self.str_buffer, ui, &mut param.pressure_loss);
-                        add_param(&mut self.str_buffer, ui, &mut param.pipe_count);
+                        add_param(ui, &mut param.pressure_loss);
+                        add_param(ui, &mut param.pipe_count);
                     });
                     if pipe_count > 1 {
                         if ui.button("削除").clicked() {
@@ -98,7 +137,7 @@ impl eframe::App for SimApp {
                         self.general_param.clone(),
                         self.calc_param.clone(),
                         self.pipe_params.clone(),
-                    ));
+                    )); 
                 }
                 if ui.button("計算結果をxlsxで保存").clicked() {
                     if let Some(result) = &self.result {
@@ -106,36 +145,36 @@ impl eframe::App for SimApp {
                             .add_filter("Excelファイル", &["xlsx"])
                             .set_file_name("calc_result.xlsx")
                             .save_file() {
+                            let ParamArrays {
+                                calc_usize,
+                                calc_f64,
+                                general,
+                            } = get_param_arrays(&mut self.calc_param, &mut self.general_param);
                             let mut book = umya_spreadsheet::new_file();
                             // 1ページ目: パラメータ一覧（1,2行目は通常パラメータ、3列目以降にPipeTypeParamをpipeごとに2列ずつ）
                             let sheet1 = book.get_sheet_by_name_mut("Sheet1").unwrap();
                             // 1,2行目: 通常パラメータ
-                            let mut keys: Vec<_> = self.str_buffer.keys().filter(|k| !k.contains("PipeType")).collect();
-                            for (i, key) in keys.iter().enumerate() {
-                                let k: &str = &**key;
-                                let value = self.str_buffer.get(k);
-                                let v: &str = value.map(|s| s.as_str()).unwrap_or("");
-                                sheet1.get_cell_mut((1, (i+1) as u32)).set_value(k);
-                                sheet1.get_cell_mut((2, (i+1) as u32)).set_value(v);
+                            let mut row = 1;
+                            for param in calc_usize.iter(){
+                                sheet1.get_cell_mut((1, row)).set_value(param.desc());
+                                sheet1.get_cell_mut((2, row)).set_value(param.value.to_string());
+                                row += 1;
                             }
-                            // 3列目以降: PipeTypeParam
-                            let pipe_count = self.pipe_params.len();
-                            let pipe_params = ["圧力損失(MPa)", "パイプ本数(-)"];
-                            // 1行目: Pipe1, Pipe2, ...
-                            for i in 0..pipe_count {
-                                let base_col = 3 + (i as u32) * 2;
-                                sheet1.get_cell_mut((base_col, 1)).set_value(format!("Pipe{}", i+1));
+                            for param in calc_f64.iter(){
+                                sheet1.get_cell_mut((1, row)).set_value(param.desc());
+                                sheet1.get_cell_mut((2, row)).set_value(param.value.to_string());
+                                row += 1;
                             }
-                            // 2行目: 空欄
-                            // 3行目以降: パラメータ名と値
-                            for (j, param_name) in pipe_params.iter().enumerate() {
-                                for i in 0..pipe_count {
-                                    let base_col = 3 + (i as u32) * 2;
-                                    let key = format!("{} (PipeType {})", param_name, i+1);
-                                    let value = self.str_buffer.get(&*Box::leak(key.clone().into_boxed_str())).map(|s| s.as_str()).unwrap_or("");
-                                    sheet1.get_cell_mut((base_col, (j+2) as u32)).set_value(*param_name);
-                                    sheet1.get_cell_mut((base_col+1, (j+2) as u32)).set_value(value);
-                                }
+                            for (r, param) in general.iter().enumerate() {
+                                sheet1.get_cell_mut((3, (r + 1) as u32)).set_value(param.desc());
+                                sheet1.get_cell_mut((4, (r + 1) as u32)).set_value(param.value.to_string());
+                            }
+                            for (i, param) in self.pipe_params.iter().enumerate() {
+                                sheet1.get_cell_mut(((5 + i * 2) as u32, 1)).set_value(format!("PipeType {}", i + 1));
+                                sheet1.get_cell_mut(((5 + i * 2) as u32, 2)).set_value(param.pipe_count.desc());
+                                sheet1.get_cell_mut(((5 + i * 2 + 1) as u32, 2)).set_value(param.pipe_count.value.to_string());
+                                sheet1.get_cell_mut(((5 + i * 2) as u32, 3)).set_value(param.pressure_loss.desc());
+                                sheet1.get_cell_mut(((5 + i * 2 + 1) as u32, 3)).set_value(param.pressure_loss.value.to_string());
                             }
                             sheet1.set_name("Parameters");
                             // 2ページ目: 各管の出口温度と平均出口温度（最左列に計算ステップ）
@@ -191,64 +230,66 @@ impl eframe::App for SimApp {
                         match umya_spreadsheet::reader::xlsx::read(path) {
                             Ok(book) => {
                                 if let Some(sheet) = book.get_sheet_by_name("Parameters") {
-                                    // 1,2行目: 通常パラメータ
-                                    let mut max_col = sheet.get_highest_column();
-                                    let mut max_row = sheet.get_highest_row();
-                                    // 通常パラメータ（1,2列目）
-                                    for col in 1..=2 {
-                                        for row in 1..=max_row {
-                                            let key = sheet.get_cell((col, row)).map(|cell| cell.get_value().to_string()).unwrap_or_default();
-                                            let value = if col == 1 {
-                                                // 1列目はパラメータ名、2列目は値
-                                                sheet.get_cell((col+1, row)).map(|cell| cell.get_value().to_string()).unwrap_or_default()
-                                            } else {
-                                                continue;
-                                            };
-                                            if !key.is_empty() && !value.is_empty() {
-                                                self.str_buffer.insert(Box::leak(key.clone().into_boxed_str()), value.clone());
-                                            }
-                                        }
-                                    }
-
-                                    // PipeTypeParam（3列目以降、2列ごとに1Pipe）
-                                    let mut pipe_params: Vec<simulation::PipeTypeParam> = Vec::new();
-                                    let pipe_param_names = ["圧力損失(MPa)", "パイプ本数(-)"];
-                                    let mut pipe_col = 3;
-                                    while pipe_col <= max_col {
-                                        // 1行目: PipeN
-                                        let pipe_label = sheet.get_cell((pipe_col, 1)).map(|cell| cell.get_value().to_string()).unwrap_or_default();
-                                        if pipe_label.is_empty() {
-                                            break;
-                                        }
-                                        // 2行目: 空欄（スキップ）
-                                        // 3行目以降: パラメータ名と値
-                                        let mut pipe_param = simulation::PipeTypeParam::default();
-                                        for (j, param_name) in pipe_param_names.iter().enumerate() {
-                                            let name_cell = sheet.get_cell((pipe_col, (j+2) as u32)).map(|cell| cell.get_value().to_string()).unwrap_or_default();
-                                            let value_cell = sheet.get_cell((pipe_col+1, (j+2) as u32)).map(|cell| cell.get_value().to_string()).unwrap_or_default();
-                                            if name_cell == *param_name {
-                                                // str_bufferにも反映
-                                                let key = format!("{} (PipeType {})", param_name, (pipe_col-2)/2 + 1);
-                                                self.str_buffer.insert(Box::leak(key.clone().into_boxed_str()), value_cell.clone());
-                                                // PipeTypeParam構造体にも反映
-                                                if param_name == &"圧力損失(MPa)" {
-                                                    if let Ok(v) = value_cell.parse() {
-                                                        pipe_param.pressure_loss.value = v;
+                                    self.reset_params();
+                                    let ParamArrays {
+                                        mut calc_usize,
+                                        mut calc_f64,
+                                        mut general,
+                                    } = get_param_arrays(&mut self.calc_param, &mut self.general_param);
+                                    let max_col = sheet.get_highest_column();
+                                    let max_row = sheet.get_highest_row();
+                                    for row in 1..=max_row {
+                                        for col in [1u32, 3u32]{
+                                            if let Some(cell) = sheet.get_cell((col, row)) {
+                                                if let Some(param) = calc_usize.iter_mut().find(|p| p.desc() == cell.get_value()) {
+                                                    if let Some(value_cell) = sheet.get_cell((col+1, row)) {
+                                                        if let Ok(value) = value_cell.get_value().parse::<usize>() {
+                                                            param.value = value;
+                                                        }
                                                     }
-                                                } else if param_name == &"パイプ本数(-)" {
-                                                    if let Ok(v) = value_cell.parse() {
-                                                        pipe_param.pipe_count.value = v;
+                                                }else if let Some(param) = calc_f64.iter_mut().find(|p| p.desc() == cell.get_value()) {
+                                                    if let Some(value_cell) = sheet.get_cell((col+1, row)) {
+                                                        if let Ok(value) = value_cell.get_value().parse::<f64>() {
+                                                            param.value = value;
+                                                        }
+                                                    }
+                                                }else if let Some(param) = general.iter_mut().find(|p| p.desc() == cell.get_value()) {
+                                                    if let Some(value_cell) = sheet.get_cell((col+1, row)) {
+                                                        if let Ok(value) = value_cell.get_value().parse::<f64>() {
+                                                            param.value = value;
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
-                                        pipe_params.push(pipe_param);
-                                        pipe_col += 2;
                                     }
-                                    if !pipe_params.is_empty() {
-                                        self.pipe_params = pipe_params;
+                                    for col in (5..=max_col).step_by(2){
+                                        if let Some(cell) = sheet.get_cell((col, 1)) {
+                                            if cell.get_value().starts_with("PipeType") {
+                                                let mut pipe_param = simulation::PipeTypeParam::default();
+                                                for row in 2..=max_row {
+                                                    if let Some(cell) = sheet.get_cell((col, row)) {
+                                                        if cell.get_value() == pipe_param.pipe_count.desc() {
+                                                            if let Some(value_cell) = sheet.get_cell((col+1, row)) {
+                                                                if let Ok(value) = value_cell.get_value().parse::<usize>() {
+                                                                    pipe_param.pipe_count.value = value;
+                                                                }
+                                                            }
+                                                        } else if cell.get_value() == pipe_param.pressure_loss.desc() {
+                                                            if let Some(value_cell) = sheet.get_cell((col+1, row)) {
+                                                                if let Ok(value) = value_cell.get_value().parse::<f64>() {
+                                                                    pipe_param.pressure_loss.value = value;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                self.pipe_params.push(pipe_param);
+                                            }
+                                        }
                                     }
                                 }
+                                println!("xlsxからパラメータを読込みました");
                             }
                             Err(e) => {
                                 println!("xlsx読込エラー: {}", e);

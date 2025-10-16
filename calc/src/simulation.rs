@@ -1,5 +1,4 @@
 use calc::Described;
-
 #[derive(Clone)]
 pub struct PipeTypeParam {
     pub pressure_loss: Described<f64>,
