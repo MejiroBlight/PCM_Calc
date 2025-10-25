@@ -21,7 +21,9 @@ class CalcResult:
     pipe_end_temperatures: List[List[float]]
     pipe_re: List[List[float]]
     pipe_open_rates: List[List[float]]
+    pipe_flow_amounts: List[List[float]]
     average_end_temperatures: List[float]
+    total_flow_amounts: List[float]
     pipe_last_pcm_thicknesses: List[List[float]]
 
 def run_simulation() -> CalcResult:
@@ -50,12 +52,14 @@ def run_simulation() -> CalcResult:
     
     # 結果初期化
     result = CalcResult(
-        pipe_end_temperatures=[[calc_param.WATER_INIT_TEMP] for _ in pipes],
-        average_end_temperatures=[calc_param.WATER_INIT_TEMP],
+        pipe_end_temperatures=[[] for _ in pipes],
         pipe_flow_rates=[[] for _ in pipes],
+        pipe_flow_amounts=[[] for _ in pipes],
         pipe_re=[[] for _ in pipes],
         pipe_open_rates=[[] for _ in pipes],
         pipe_last_pcm_thicknesses=[[] for _ in pipes],
+        average_end_temperatures=[],
+        total_flow_amounts=[],
     )
     
     print("計算開始")
@@ -103,9 +107,10 @@ def run_simulation() -> CalcResult:
                 v = v_new
             pipe.flow_rate = v
             
-            # 流量・レイノルズ数記録
+            # 流速・レイノルズ数・流量記録
             result.pipe_flow_rates[pipes.index(pipe)].append(v)
             result.pipe_re[pipes.index(pipe)].append(Re)
+            result.pipe_flow_amounts[pipes.index(pipe)].append(v * math.pi * (calc_param.PIPE_INDIR / 2)**2)
             if step % 1000 == 0 or step == 1:
                 print(f"クーラン数 (パイプ {pipes.index(pipe)+1}): {v*calc_param.TIME_STEP/x :.2f}")
             
@@ -167,6 +172,9 @@ def run_simulation() -> CalcResult:
         weighted_temp_sum = sum(p.flow_rate * p.composition_rate * p.meshes[calc_param.MESH_COUNT - 1].temp for p in pipes)
         weight_sum = sum(p.flow_rate * p.composition_rate for p in pipes)
         result.average_end_temperatures.append(weighted_temp_sum / weight_sum)
+
+        # 合計流量
+        result.total_flow_amounts.append(sum(amounts[-1] * calc_param.PIPES[i].PIPE_COUNT for i, amounts in enumerate(result.pipe_flow_amounts)))
     
     print("計算完了")
 
