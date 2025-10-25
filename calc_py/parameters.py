@@ -22,6 +22,7 @@ class CalcParam:
     VALVE_START_CLOCING_TEMP = 45  # ℃
     VALVE_END_CLOSING_TEMP = 35  # ℃
     USE_HIGH_ORDER_UPWIND_DIF = True  # 高次風上差分の使用
+    WATER_VISC_REF_TEMP = None  # ℃ or None # 動粘度計算の基準温度（Noneの場合は平均温度参照）
     PIPES = [
         _PipeTypeParam(PRESSURE_LOSS=0.002, PIPE_COUNT=1000),
     ]

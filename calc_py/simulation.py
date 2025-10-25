@@ -25,6 +25,7 @@ class CalcResult:
     average_end_temperatures: List[float]
     total_flow_amounts: List[float]
     pipe_last_pcm_thicknesses: List[List[float]]
+    total_req_area: float
 
 def run_simulation() -> CalcResult:
     # パラメータ取得
@@ -60,6 +61,7 @@ def run_simulation() -> CalcResult:
         pipe_last_pcm_thicknesses=[[] for _ in pipes],
         average_end_temperatures=[],
         total_flow_amounts=[],
+        total_req_area=0.0
     )
     
     print("計算開始")
@@ -91,7 +93,10 @@ def run_simulation() -> CalcResult:
             #流量計算
             average_temp = sum(mesh.temp for mesh in pipe.meshes) / calc_param.MESH_COUNT
             pressure_loss = calc_param.PIPES[pipes.index(pipe)].PRESSURE_LOSS * 10**6 * pipe.valve_open_rate # Pa/m
-            viscosity = general_param.water_viscosity(average_temp)
+            viscosity = general_param.water_viscosity(
+                average_temp if calc_param.WATER_VISC_REF_TEMP is None 
+                else calc_param.WATER_VISC_REF_TEMP
+            )
             v = pressure_loss * calc_param.PIPE_INDIR**2 / (32 * viscosity * calc_param.PIPE_LENGTH)
             for _ in range(50):  # 収束計算ループ
                 Re = general_param.WATER_DENS * v * calc_param.PIPE_INDIR / viscosity
@@ -110,7 +115,7 @@ def run_simulation() -> CalcResult:
             # 流速・レイノルズ数・流量記録
             result.pipe_flow_rates[pipes.index(pipe)].append(v)
             result.pipe_re[pipes.index(pipe)].append(Re)
-            result.pipe_flow_amounts[pipes.index(pipe)].append(v * math.pi * (calc_param.PIPE_INDIR / 2)**2)
+            result.pipe_flow_amounts[pipes.index(pipe)].append(v * math.pi * (calc_param.PIPE_INDIR / 2)**2 * general_param.WATER_DENS * 60)  # L/min
             if step % 1000 == 0 or step == 1:
                 print(f"クーラン数 (パイプ {pipes.index(pipe)+1}): {v*calc_param.TIME_STEP/x :.2f}")
             
@@ -176,9 +181,15 @@ def run_simulation() -> CalcResult:
         # 合計流量
         result.total_flow_amounts.append(sum(amounts[-1] * calc_param.PIPES[i].PIPE_COUNT for i, amounts in enumerate(result.pipe_flow_amounts)))
     
-    print("計算完了")
-
+    
+    # PCM厚み保存
     for i, pipe in enumerate(pipes):
         result.pipe_last_pcm_thicknesses[i] = [mesh.pcm_thickness for mesh in pipe.meshes]
+    # 必要面積計算
+    result.total_req_area = sum(
+        math.pi * (calc_param.PIPE_OUTDIR + 2.0 * pipe.meshes[0].pcm_thickness) * calc_param.PIPES[i].PIPE_COUNT
+        for i, pipe in enumerate(pipes))
+
+    print("計算完了")
 
     return result
