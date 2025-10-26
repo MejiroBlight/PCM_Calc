@@ -187,7 +187,7 @@ def run_simulation() -> CalcResult:
         result.pipe_last_pcm_thicknesses[i] = [mesh.pcm_thickness for mesh in pipe.meshes]
     # 必要面積計算
     result.total_req_area = sum(
-        math.pi * (calc_param.PIPE_OUTDIR + 2.0 * pipe.meshes[0].pcm_thickness) * calc_param.PIPES[i].PIPE_COUNT
+        math.pi * (calc_param.PIPE_OUTDIR / 2.0 + pipe.meshes[0].pcm_thickness)**2 * calc_param.PIPES[i].PIPE_COUNT
         for i, pipe in enumerate(pipes))
 
     print("計算完了")
