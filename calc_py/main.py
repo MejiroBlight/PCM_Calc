@@ -38,6 +38,7 @@ def save_result_to_xlsx(result: simulation.CalcResult, filename: str = None):
         total_data = {'Time(s)': steps}
         total_data['Average_End_Temperature'] = result.average_end_temperatures
         total_data['Total_Flow_Amount(L/m)'] = result.total_flow_amounts
+        total_data['Total_Integ_Flow_Amount(L)'] = result.total_integ_flow_amounts
         df_total = pd.DataFrame(total_data)
         df_total.to_excel(writer, sheet_name= 'Total_Lapse_Data' , index=False)
 
@@ -51,13 +52,13 @@ def save_result_to_xlsx(result: simulation.CalcResult, filename: str = None):
             pipe_data[f'Valve_Open_Rate'] = result.pipe_open_rates[i]
             df_pipe = pd.DataFrame(pipe_data)
             df_pipe.to_excel(writer, sheet_name=f'Pipe_{i+1}_Lapse_Data', index=False)
-
+        # 3. 各パイプごとの最終メッシュデータを出力
         for i in range(len(CalcParam.PIPES)):
             pipe_data = {'mesh_index': range(CalcParam.MESH_COUNT)}
             pipe_data[f'Last_PCM_Thickness'] = result.pipe_last_pcm_thicknesses[i]
             df_pipe = pd.DataFrame(pipe_data)
             df_pipe.to_excel(writer, sheet_name=f'Pipe_{i+1}_Last_Data', index=False)
-
+        # 4. その他の結果データを出力
         df_other = pd.DataFrame(
             [
                 ["Total_Required_Area(m2)", result.total_req_area],

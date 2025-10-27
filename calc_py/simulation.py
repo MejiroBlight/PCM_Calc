@@ -25,6 +25,7 @@ class CalcResult:
     average_end_temperatures: List[float]
     total_flow_amounts: List[float]
     pipe_last_pcm_thicknesses: List[List[float]]
+    total_integ_flow_amounts: List[float]
     total_req_area: float
 
 def run_simulation() -> CalcResult:
@@ -61,6 +62,7 @@ def run_simulation() -> CalcResult:
         pipe_last_pcm_thicknesses=[[] for _ in pipes],
         average_end_temperatures=[],
         total_flow_amounts=[],
+        total_integ_flow_amounts=[],
         total_req_area=0.0
     )
     
@@ -179,7 +181,13 @@ def run_simulation() -> CalcResult:
         result.average_end_temperatures.append(weighted_temp_sum / weight_sum)
 
         # 合計流量
-        result.total_flow_amounts.append(sum(amounts[-1] * calc_param.PIPES[i].PIPE_COUNT for i, amounts in enumerate(result.pipe_flow_amounts)))
+        total_flow = sum(amounts[-1] * calc_param.PIPES[i].PIPE_COUNT for i, amounts in enumerate(result.pipe_flow_amounts))
+        result.total_flow_amounts.append(total_flow)
+        # 合計積算流量
+        result.total_integ_flow_amounts.append(
+            result.total_integ_flow_amounts[-1] + total_flow * calc_param.TIME_STEP / 60.0 if step > 1 
+            else total_flow * calc_param.TIME_STEP / 60.0
+        )
     
     
     # PCM厚み保存
