@@ -10,11 +10,11 @@ class _PipeTypeParam:
 
 class CalcParam:
     MESH_COUNT = 100  # -
-    TIME_STEP = 0.01  # s
+    TIME_STEP = 0.02  # s
     CALCULATION_STEP = 30000  # -
     PIPE_LENGTH = 0.5  # m
-    PIPE_OUTDIR = 0.0013  # m
-    PIPE_INDIR = 0.001  # m
+    PIPE_OUTDIR = 0.0035  # m
+    PIPE_INDIR = 0.003  # m
     PCM_INIT_THICKNESS = 0.000001  # m
     WATER_INLET_TEMP = 5.0  # ℃
     WATER_INIT_TEMP = 58.0  # ℃
@@ -24,7 +24,7 @@ class CalcParam:
     USE_HIGH_ORDER_UPWIND_DIF = True  # 高次風上差分の使用
     WATER_VISC_REF_TEMP = None  # ℃ or None # 動粘度計算の基準温度（Noneの場合は平均温度参照）
     PIPES = [
-        _PipeTypeParam(PRESSURE_LOSS=0.002, PIPE_COUNT=1000),
+        _PipeTypeParam(PRESSURE_LOSS=0.001, PIPE_COUNT=100),
     ]
 
 class GeneralParam:

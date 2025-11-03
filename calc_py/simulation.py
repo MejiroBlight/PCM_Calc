@@ -90,7 +90,7 @@ def run_simulation() -> CalcResult:
                                      (4.0 * (calc_param.PIPE_OUTDIR + 2.0 * mesh.pcm_thickness) * general_param.PCM_DENS * general_param.PCM_LATENT))
                 # 計算結果反映
                 mesh.temp += delta_temp
-                mesh.pcm_thickness += delta_pcm_thickness
+                mesh.pcm_thickness += max(delta_pcm_thickness, 0)
             
             #流量計算
             average_temp = sum(mesh.temp for mesh in pipe.meshes) / calc_param.MESH_COUNT
@@ -102,6 +102,9 @@ def run_simulation() -> CalcResult:
             v = pressure_loss * calc_param.PIPE_INDIR**2 / (32 * viscosity * calc_param.PIPE_LENGTH)
             for _ in range(50):  # 収束計算ループ
                 Re = general_param.WATER_DENS * v * calc_param.PIPE_INDIR / viscosity
+                if Re == 0:
+                    break
+
                 if Re < 2300:
                     f = 64.0 / Re
                 else:
@@ -178,7 +181,10 @@ def run_simulation() -> CalcResult:
         # 平均出口温度
         weighted_temp_sum = sum(p.flow_rate * p.composition_rate * p.meshes[calc_param.MESH_COUNT - 1].temp for p in pipes)
         weight_sum = sum(p.flow_rate * p.composition_rate for p in pipes)
-        result.average_end_temperatures.append(weighted_temp_sum / weight_sum)
+        if weight_sum == 0:
+            result.average_end_temperatures.append(0.0)
+        else:
+            result.average_end_temperatures.append(weighted_temp_sum / weight_sum)
 
         # 合計流量
         total_flow = sum(amounts[-1] * calc_param.PIPES[i].PIPE_COUNT for i, amounts in enumerate(result.pipe_flow_amounts))
