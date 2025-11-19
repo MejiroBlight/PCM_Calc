@@ -44,7 +44,7 @@ def run_simulation() -> CalcResult:
     for pipe_param in pipe_params:
         # メッシュ初期化
         meshes = [Mesh(temp=calc_param.WATER_INIT_TEMP, 
-                      pcm_thickness=calc_param.PCM_INIT_THICKNESS) 
+                      pcm_thickness=pipe_param.PCM_INIT_THICKNESS) 
                  for _ in range(calc_param.MESH_COUNT)]
         
         # パイプ組成割合
@@ -76,6 +76,8 @@ def run_simulation() -> CalcResult:
         for pipe in pipes:
             # メッシュ毎の計算
             for mesh in pipe.meshes:
+                if mesh.pcm_thickness >= calc_param.PCM_MAX_THICKNESS:
+                    continue
                 # 熱抵抗
                 r = (
                     1.0 / (general_param.NUSSCELT * general_param.WATER_COND) +
@@ -169,8 +171,8 @@ def run_simulation() -> CalcResult:
 
             # バルブ開閉率
             last_mesh_temp = pipe.meshes[calc_param.MESH_COUNT - 1].temp
-            if last_mesh_temp <= params.CalcParam.VALVE_START_CLOCING_TEMP:
-                pipe.valve_open_rate = max(0.0, (last_mesh_temp - params.CalcParam.VALVE_END_CLOSING_TEMP) / max(1 ,params.CalcParam.VALVE_START_CLOCING_TEMP - params.CalcParam.VALVE_END_CLOSING_TEMP))
+            if last_mesh_temp <= params.CalcParam.VALVE_START_CLOSING_TEMP:
+                pipe.valve_open_rate = max(0.0, (last_mesh_temp - params.CalcParam.VALVE_END_CLOSING_TEMP) / max(1 ,params.CalcParam.VALVE_START_CLOSING_TEMP - params.CalcParam.VALVE_END_CLOSING_TEMP))
         
         # 結果保存
         # 各パイプの出口温度
