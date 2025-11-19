@@ -5,17 +5,18 @@ class _PipeTypeParam:
     PIPE_COUNT: int  # -
     PCM_INIT_THICKNESS: float  # m
     
-    def __init__(self, PRESSURE_LOSS: float, PIPE_COUNT: int):
+    def __init__(self, PRESSURE_LOSS: float, PIPE_COUNT: int, PCM_INIT_THICKNESS: float):
         self.PRESSURE_LOSS = PRESSURE_LOSS
         self.PIPE_COUNT = PIPE_COUNT
+        self.PCM_INIT_THICKNESS = PCM_INIT_THICKNESS
 
 class CalcParam:
     MESH_COUNT = 100  # -
     TIME_STEP = 0.05  # s
-    CALCULATION_STEP = 5000  # -
+    CALCULATION_STEP = 12000  # -
     PIPE_LENGTH = 0.5  # m
-    PIPE_OUTDIR = 0.0024  # m
-    PIPE_INDIR = 0.0019  # m
+    PIPE_OUTDIR = 0.0025  # m
+    PIPE_INDIR = 0.002  # m
     WATER_INLET_TEMP = 5.0  # ℃
     WATER_INIT_TEMP = 58.0  # ℃
     PCM_TEMP = 58.0  # ℃
@@ -25,7 +26,7 @@ class CalcParam:
     USE_HIGH_ORDER_UPWIND_DIF = True  # 高次風上差分の使用
     WATER_VISC_REF_TEMP = None  # ℃ or None # 動粘度計算の基準温度（Noneの場合は平均温度参照）
     PIPES = [
-        _PipeTypeParam(PRESSURE_LOSS=0.0001, PIPE_COUNT=2600, PCM_INIT_THICKNESS=0.0001),  # Type A
+        _PipeTypeParam(PRESSURE_LOSS=0.0001, PIPE_COUNT=1000, PCM_INIT_THICKNESS=0.0001),  # Type A
     ]
 
 class GeneralParam:
